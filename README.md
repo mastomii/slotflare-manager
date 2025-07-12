@@ -3,6 +3,16 @@ SlotFlare
 
 SlotFlare is a Web UI for managing Cloudflare Workers that block online gambling content (especially "slot" related) — built to simplify the deployment of [gacor-cf-worker](https://github.com/mastomii/gacor-cf-worker).
 
+---
+
+![](images/01.png)
+![](images/02.png)
+![](images/03.png)
+![](images/04.png)
+![](images/05.png)
+
+---
+
 This tool lets you manage everything via a simple interface:
 - Set forbidden keywords (e.g. "slot", "judi", "gacor")
 - Define whitelisted paths
