@@ -662,7 +662,7 @@ async function handleRequest(request, event) {
                                 {path}
                               </Badge>
                             ))
-                          : <span className="text-xs text-muted-foreground">No whitelist paths</span>
+                          : <span className="text-xs text-muted-foreground">None</span>
                         }
                       </div>
                     </div>

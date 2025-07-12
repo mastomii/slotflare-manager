@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Eye, CheckCircle, Clock } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
@@ -26,6 +26,7 @@ interface AlertData {
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<AlertData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
@@ -33,38 +34,38 @@ export default function AlertsPage() {
     fetchAlerts();
   }, []);
 
-  const fetchAlerts = async () => {
-    setIsLoading(true);
+  const fetchAlerts = async (isRefresh = false) => {
+    if (isRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    
     try {
       const response = await fetch('/api/alerts');
       if (response.ok) {
         const data = await response.json();
         setAlerts(data);
+        if (isRefresh) {
+          toast.success('Alerts refreshed');
+        }
       }
     } catch (error) {
       toast.error('Gagal memuat alerts');
     } finally {
-      setIsLoading(false);
+      if (isRefresh) {
+        setIsRefreshing(false);
+      } else {
+        setIsLoading(false);
+      }
     }
   };
 
-  const updateAlertStatus = async (alertId: string, status: string) => {
-    try {
-      const response = await fetch(`/api/alerts/${alertId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      if (response.ok) {
-        toast.success('Status alert berhasil diupdate');
-        fetchAlerts();
-      } else {
-        toast.error('Gagal update status alert');
-      }
-    } catch (error) {
-      toast.error('Terjadi kesalahan');
-    }
+  const handleRefresh = () => {
+    fetchAlerts(true);
   };
+
+
 
   const clearAlert = async (alertId: string) => {
     try {
@@ -102,31 +103,7 @@ export default function AlertsPage() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'new':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400';
-      case 'read':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400';
-      case 'resolved':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400';
-    }
-  };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'new':
-        return <AlertTriangle className="h-4 w-4" />;
-      case 'read':
-        return <Eye className="h-4 w-4" />;
-      case 'resolved':
-        return <CheckCircle className="h-4 w-4" />;
-      default:
-        return <Clock className="h-4 w-4" />;
-    }
-  };
 
   if (isLoading) {
     return (
@@ -143,29 +120,42 @@ export default function AlertsPage() {
           <h1 className="text-3xl font-bold">Alert History</h1>
           <p className="text-muted-foreground mt-2">Alert history from worker scripts</p>
         </div>
-        {alerts.length > 0 && (
-          <Dialog open={showClearModal} onOpenChange={setShowClearModal}>
-            <DialogTrigger asChild>
-              <Button variant="destructive" onClick={() => setShowClearModal(true)}>
-                Clear All Alerts
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Delete All Alerts?</DialogTitle>
-                <DialogDescription>
-                  Are you sure you want to delete all alert history? This action cannot be undone.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowClearModal(false)} disabled={isClearing}>Cancel</Button>
-                <Button className="bg-red-500 hover:bg-red-600" onClick={clearAllAlerts} disabled={isClearing}>
-                  {isClearing ? 'Deleting...' : 'Delete All'}
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+          {alerts.length > 0 && (
+            <Dialog open={showClearModal} onOpenChange={setShowClearModal}>
+              <DialogTrigger asChild>
+                <Button variant="destructive" size="sm" onClick={() => setShowClearModal(true)}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear All
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete All Alerts?</DialogTitle>
+                  <DialogDescription>
+                    Are you sure you want to delete all alert history? This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowClearModal(false)} disabled={isClearing}>Cancel</Button>
+                  <Button className="bg-red-500 hover:bg-red-600" onClick={clearAllAlerts} disabled={isClearing}>
+                    {isClearing ? 'Deleting...' : 'Delete All'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-4">
@@ -188,48 +178,49 @@ export default function AlertsPage() {
               transition={{ delay: index * 0.1 }}
             >
               <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-red-100 dark:bg-red-900/20 rounded-lg">
-                        <AlertTriangle className="h-5 w-5 text-red-500" />
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className="p-2 bg-red-100 dark:bg-red-900/20 rounded-lg mt-1">
+                        <AlertTriangle className="h-4 w-4 text-red-500" />
                       </div>
-                      <div>
-                        <CardTitle className="text-lg">{alert.scriptName}</CardTitle>
-                        <CardDescription className="font-mono text-sm">{alert.fullPath}</CardDescription>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <h4 className="font-medium text-sm mb-2">Source IP</h4>
-                      <p className="text-sm text-muted-foreground font-mono">{alert.sourceIP}</p>
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-sm mb-2">Response Code</h4>
-                      <Badge variant="outline" className="text-xs">
-                        {alert.responseCode}
-                      </Badge>
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-sm mb-2">Detected Keywords</h4>
-                      <div className="flex flex-wrap gap-1">
-                        {alert.detectedKeywords.map((keyword, i) => (
-                          <Badge key={i} variant="secondary" className="text-xs">
-                            {keyword}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-sm truncate">{alert.scriptName}</h3>
+                          <Badge variant="outline" className="text-xs">
+                            {alert.responseCode}
                           </Badge>
-                        ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground font-mono truncate mb-2">
+                          {alert.fullPath}
+                        </p>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          <span className="font-mono">{alert.sourceIP}</span>
+                          <span>•</span>
+                          <span>{formatDistanceToNow(new Date(alert.time), { addSuffix: true })}</span>
+                          {alert.detectedKeywords.length > 0 && (
+                            <span className="flex flex-wrap gap-1 ml-2">
+                              {alert.detectedKeywords.map((keyword, i) => (
+                                <Badge key={i} variant="secondary" className="text-xs">
+                                  {keyword}
+                                </Badge>
+                              ))}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="mt-4 pt-4 border-t">
-                    <p className="text-sm text-muted-foreground">
-                      Detected: {formatDistanceToNow(new Date(alert.time), { addSuffix: true })}
-                    </p>
+                    <div className="flex items-center gap-1 ml-4">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => clearAlert(alert._id)}
+                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                        title="Delete alert"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
