@@ -23,16 +23,14 @@ export function Header() {
     // Check if registration is enabled
     const checkRegistrationStatus = async () => {
       try {
-        const response = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ email: 'test@test.com', password: 'test' }),
+        const response = await fetch('/api/auth/register/status', {
+          method: 'GET',
         });
         
         if (response.status === 403) {
           setRegistrationEnabled(false);
+        } else {
+          setRegistrationEnabled(true);
         }
       } catch (error) {
         // If there's an error, assume registration is enabled
