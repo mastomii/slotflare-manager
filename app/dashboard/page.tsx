@@ -38,17 +38,19 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [domainsRes, routesRes] = await Promise.all([
+        const [domainsRes, routesRes, scriptsRes] = await Promise.all([
           fetch('/api/domains'),
           fetch('/api/routes'),
+          fetch('/api/scripts'),
         ]);
 
         const domains = await domainsRes.json();
         const routes = await routesRes.json();
+        const scripts = await scriptsRes.json();
 
         setStats({
           domains: domains.length || 0,
-          workers: routes.filter((r: any) => r.status === 'success').length || 0,
+          workers: scripts.length || 0, // Count deployed scripts as active workers
           routes: routes.length || 0,
         });
       } catch (error) {
@@ -186,7 +188,7 @@ export default function DashboardPage() {
             <CardContent>
               <div className="text-2xl font-bold">{stats.workers}</div>
               <p className="text-xs text-muted-foreground">
-                Successfully deployed workers
+                Deployed worker scripts
               </p>
             </CardContent>
           </Card>
