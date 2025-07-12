@@ -1,0 +1,8 @@
+{
+  "scriptName": "test-script",
+  "fullPath": "/test",
+  "time": "2024-01-15T12:00:00.000Z",
+  "sourceIP": "127.0.0.1",
+  "responseCode": 403,
+  "detectedKeywords": ["password", "secret"]
+} 
