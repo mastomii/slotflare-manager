@@ -105,89 +105,82 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     script.enableAlert = enableAlert !== undefined ? enableAlert : script.enableAlert;
     
     // Generate script content from fixed template
-    const template = `// Attach an event listener to handle 'fetch' events
-addEventListener('fetch', event => {
-    // Respond to the fetch event with the custom handleRequest function
-    event.respondWith(handleRequest(event.request));
+    const template = `addEventListener('fetch', event => {
+    event.respondWith(handleRequest(event.request, event));
 });
 
-async function handleRequest(request) {
-    const url = new URL(request.url); // Parse the URL of the incoming request
-    const path = url.pathname; // Extract the path from the URL
+async function handleRequest(request, event) {
+    const url = new URL(request.url);
+    const path = url.pathname;
 
-    // List of whitelisted paths (content check is skipped for these paths)
     const whitelistPaths = [${(script.whitelistPaths || []).map((p: string) => `'${p}'`).join(', ')}];
-
-    // List of forbidden keywords to block if found in the content
     const forbiddenKeywords = [${(script.keywords || []).map((k: string) => `'${k}'`).join(', ')}];
 
-    // If the request path is in the whitelist, return the original response without checking
     if (whitelistPaths.includes(path)) {
         return fetch(request);
     }
 
-    // Fetch the original response from the origin server
     const response = await fetch(request);
+    const responseClone = response.clone();
+    const contentType = response.headers.get('Content-Type') || '';
 
-    // Clone the response to read its content while preserving the original
-    let responseClone = response.clone();
-    let contentType = response.headers.get('Content-Type') || ''; // Get the Content-Type header
+    let body;
 
-    let body; // Variable to store the response body
-
-    // Parse the response body based on the content type
-    if (contentType.includes('application/json')) {
-        body = await responseClone.json(); // Parse JSON content
-    } else if (contentType.includes('text')) {
-        body = await responseClone.text(); // Parse plain text content
-    } else {
-        // If the content is not JSON or text, return the original response as is
+    try {
+        if (contentType.includes('application/json')) {
+            body = await responseClone.json();
+        } else if (contentType.includes('text')) {
+            body = await responseClone.text();
+        } else {
+            return response;
+        }
+    } catch (err) {
+        console.error('Failed to parse response body:', err);
         return response;
     }
 
-    let containsForbidden = false; // Flag to check for forbidden keywords
+    let containsForbidden = false;
 
-    // Check for forbidden keywords in the response body
     if (typeof body === 'string') {
-        // If the body is a string, directly search for forbidden keywords
         containsForbidden = forbiddenKeywords.some(keyword => body.includes(keyword));
     } else if (typeof body === 'object') {
-        // If the body is an object (JSON), convert it to a string for keyword searching
         const bodyString = JSON.stringify(body);
         containsForbidden = forbiddenKeywords.some(keyword => bodyString.includes(keyword));
     }
 
-    // If any forbidden keyword is found, block the response with a 403 status
     if (containsForbidden) {
-        // Trigger alert if enabled
-        if (${script.enableAlert}) {
-            try {
-                const alertData = {
-                    fullPath: request.url,
-                    time: new Date().toISOString(),
-                    sourceIP: request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown',
-                    responseCode: 403,
-                    scriptName: '${script.scriptName}',
-                    detectedKeywords: forbiddenKeywords.filter(keyword => 
-                        typeof body === 'string' ? body.includes(keyword) : JSON.stringify(body).includes(keyword)
-                    )
-                };
-                
-                // Send alert to trigger endpoint
-                fetch('${process.env.NEXTAUTH_URL || 'https://slotflare-manager.vercel.app'}/api/trigger', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(alertData)
-                }).catch(err => console.error('Alert trigger failed:', err));
-            } catch (error) {
-                console.error('Error sending alert:', error);
-            }
-        }
-        
+        ${script.enableAlert ? `
+        const alertData = {
+            fullPath: request.url,
+            time: new Date().toISOString(),
+            sourceIP: request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown',
+            responseCode: 403,
+            scriptName: '${script.scriptName}',
+            detectedKeywords: forbiddenKeywords.filter(keyword =>
+                typeof body === 'string'
+                    ? body.includes(keyword)
+                    : JSON.stringify(body).includes(keyword)
+            )
+        };
+
+        // Kirim alert secara paralel, tapi pastikan Worker tidak menghentikan sebelum selesai
+        event.waitUntil(
+            fetch('${process.env.NEXTAUTH_URL || 'https://slotflare-manager.vercel.app'}/api/trigger', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(alertData)
+            })
+            .then(res => res.text().then(text => {
+                console.log('ALERT RESPONSE', res.status, text);
+            }))
+            .catch(err => {
+                console.error('Alert trigger failed:', err);
+            })
+        );` : ''}
+
         return new Response('Forbidden: Content blocked.', { status: 403 });
     }
 
-    // If no forbidden keywords are found, return the original response
     return response;
 }`;
     
