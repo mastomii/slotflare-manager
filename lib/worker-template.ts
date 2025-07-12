@@ -8,9 +8,12 @@ export interface WorkerTemplateData {
   
   export function generateWorkerTemplate(data: WorkerTemplateData): string {
     const { scriptName, keywords, whitelistPaths, enableAlert, baseUrl } = data;
-    
+  
     const alertUrl = baseUrl || process.env.NEXTAUTH_URL || 'https://slotflare.vercel.app';
-    
+  
+    const forbiddenHtmlResponse = `
+  <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>403</title><style> .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont,'Segoe UI', sans-serif; text-align: center; } h1 { color: #333; margin-bottom: 1rem; } p { color: #666; margin-bottom: 2rem; } </style></head><body><div class="container"><h1>403 Forbidden</h1><p>This URL is blocked because it contains inappropriate contents.</p></div></body></html>`.trim();
+  
     return `addEventListener('fetch', event => {
       event.respondWith(handleRequest(event.request, event));
   });
@@ -76,7 +79,6 @@ export interface WorkerTemplateData {
               detectedKeywords: detectedKeywords
           };
   
-          // Kirim alert secara paralel, tapi pastikan Worker tidak menghentikan sebelum selesai
           event.waitUntil(
               fetch('${alertUrl}/api/trigger', {
                   method: 'POST',
@@ -91,7 +93,12 @@ export interface WorkerTemplateData {
               })
           );` : ''}
   
-          return new Response('Forbidden: Content blocked.', { status: 403 });
+          return new Response(\`${forbiddenHtmlResponse}\`, {
+              status: 403,
+              headers: {
+                  'Content-Type': 'text/html; charset=utf-8'
+              }
+          });
       }
   
       return response;
