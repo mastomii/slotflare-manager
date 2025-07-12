@@ -187,6 +187,31 @@ async function handleRequest(request) {
 
     // If any forbidden keyword is found, block the response with a 403 status
     if (containsForbidden) {
+        // Trigger alert if enabled
+        if (${newScript.enableAlert}) {
+            try {
+                const alertData = {
+                    fullPath: request.url,
+                    time: new Date().toISOString(),
+                    sourceIP: request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown',
+                    responseCode: 403,
+                    scriptName: '${newScript.scriptName}',
+                    detectedKeywords: forbiddenKeywords.filter(keyword => 
+                        typeof body === 'string' ? body.includes(keyword) : JSON.stringify(body).includes(keyword)
+                    )
+                };
+                
+                // Send alert to trigger endpoint
+                fetch('${process.env.NEXTAUTH_URL || 'https://slotflare-manager.vercel.app'}/api/trigger', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(alertData)
+                }).catch(err => console.error('Alert trigger failed:', err));
+            } catch (error) {
+                console.error('Error sending alert:', error);
+            }
+        }
+        
         return new Response('Forbidden: Content blocked.', { status: 403 });
     }
 

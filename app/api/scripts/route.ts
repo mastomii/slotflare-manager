@@ -104,7 +104,7 @@ async function handleRequest(request) {
     // If any forbidden keyword is found, block the response with a 403 status
     if (containsForbidden) {
         // Trigger alert if enabled
-        if (${enableAlert === true ? 'true' : 'false'}) {
+        if (${enableAlert}) {
             try {
                 const alertData = {
                     fullPath: request.url,
@@ -118,7 +118,7 @@ async function handleRequest(request) {
                 };
                 
                 // Send alert to trigger endpoint
-                fetch('${process.env.NEXTAUTH_URL || 'https://your-domain.com'}/api/trigger', {
+                fetch('${process.env.NEXTAUTH_URL || 'https://slotflare-manager.vercel.app'}/api/trigger', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(alertData)

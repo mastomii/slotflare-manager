@@ -7,6 +7,7 @@ import Alert from '@/models/Alert';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    console.log('[TRIGGER] Received alert data:', body);
     
     await connectDB();
     
@@ -16,7 +17,11 @@ export async function POST(request: NextRequest) {
       const script = await WorkerScript.findOne({ scriptName: body.scriptName });
       if (script) {
         userId = script.userId;
+        console.log('[TRIGGER] Found script:', script.scriptName, 'User ID:', userId);
+      } else {
+        console.log('[TRIGGER] Script not found:', body.scriptName);
       }
+      
       const alert = new Alert({
         userId,
         scriptName: body.scriptName,
@@ -26,15 +31,20 @@ export async function POST(request: NextRequest) {
         responseCode: body.responseCode,
         detectedKeywords: body.detectedKeywords || [],
       });
+      
       try {
-              await alert.save();
-    } catch (saveError) {
-      console.error('[ALERT SAVE ERROR]', saveError);
+        await alert.save();
+        console.log('[TRIGGER] Alert saved successfully:', alert._id);
+      } catch (saveError) {
+        console.error('[ALERT SAVE ERROR]', saveError);
+      }
+    } else {
+      console.log('[TRIGGER] Invalid alert data - missing fullPath or scriptName');
     }
-  }
     
     // Check if any user has trigger alert enabled
     const usersWithAlert = await User.find({ triggerAlertEnabled: true });
+    console.log('[TRIGGER] Users with alert enabled:', usersWithAlert.length);
     
     if (usersWithAlert.length > 0) {
       // Check if any script has enableAlert set to true
@@ -43,9 +53,12 @@ export async function POST(request: NextRequest) {
         enableAlert: true
       });
       
+      console.log('[TRIGGER] Scripts with alert enabled:', scriptsWithAlert.length);
+      
       if (scriptsWithAlert.length > 0) {
         // Here you can add custom alert processing logic
         // For example: send email, push notification, etc.
+        console.log('[TRIGGER] Alert processing completed');
       }
     }
     
