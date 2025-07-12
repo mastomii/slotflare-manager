@@ -289,7 +289,7 @@ async function handleRequest(request) {
     // If any forbidden keyword is found, block the response with a 403 status
     if (containsForbidden) {
         // Trigger alert if enabled
-        if (${script.enableAlert === true ? 'true' : 'false'}) {
+        if (${script.enableAlert}) {
             try {
                 const alertData = {
                     fullPath: request.url,
@@ -303,7 +303,7 @@ async function handleRequest(request) {
                 };
                 
                 // Send alert to trigger endpoint
-                fetch('${typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'}/api/trigger', {
+                fetch('${typeof window !== 'undefined' ? window.location.origin : 'https://slotflare-manager.vercel.app'}/api/trigger', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(alertData)
