@@ -6,6 +6,7 @@ import WorkerScript from '@/models/WorkerScript';
 import DeployLog from '@/models/DeployLog';
 import User from '@/models/User';
 import { CloudflareAPI } from '@/lib/cloudflare';
+import { generateWorkerTemplate } from '@/lib/worker-template';
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -104,85 +105,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     script.whitelistPaths = whitelistPaths || script.whitelistPaths;
     script.enableAlert = enableAlert !== undefined ? enableAlert : script.enableAlert;
     
-    // Generate script content from fixed template
-    const template = `addEventListener('fetch', event => {
-    event.respondWith(handleRequest(event.request, event));
-});
-
-async function handleRequest(request, event) {
-    const url = new URL(request.url);
-    const path = url.pathname;
-
-    const whitelistPaths = [${(script.whitelistPaths || []).map((p: string) => `'${p}'`).join(', ')}];
-    const forbiddenKeywords = [${(script.keywords || []).map((k: string) => `'${k}'`).join(', ')}];
-
-    if (whitelistPaths.includes(path)) {
-        return fetch(request);
-    }
-
-    const response = await fetch(request);
-    const responseClone = response.clone();
-    const contentType = response.headers.get('Content-Type') || '';
-
-    let body;
-
-    try {
-        if (contentType.includes('application/json')) {
-            body = await responseClone.json();
-        } else if (contentType.includes('text')) {
-            body = await responseClone.text();
-        } else {
-            return response;
-        }
-    } catch (err) {
-        console.error('Failed to parse response body:', err);
-        return response;
-    }
-
-    let containsForbidden = false;
-
-    if (typeof body === 'string') {
-        containsForbidden = forbiddenKeywords.some(keyword => body.includes(keyword));
-    } else if (typeof body === 'object') {
-        const bodyString = JSON.stringify(body);
-        containsForbidden = forbiddenKeywords.some(keyword => bodyString.includes(keyword));
-    }
-
-    if (containsForbidden) {
-        ${script.enableAlert ? `
-        const alertData = {
-            fullPath: request.url,
-            time: new Date().toISOString(),
-            sourceIP: request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown',
-            responseCode: 403,
-            scriptName: '${script.scriptName}',
-            detectedKeywords: forbiddenKeywords.filter(keyword =>
-                typeof body === 'string'
-                    ? body.includes(keyword)
-                    : JSON.stringify(body).includes(keyword)
-            )
-        };
-
-        // Kirim alert secara paralel, tapi pastikan Worker tidak menghentikan sebelum selesai
-        event.waitUntil(
-            fetch('${process.env.NEXTAUTH_URL || 'https://slotflare-manager.vercel.app'}/api/trigger', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(alertData)
-            })
-            .then(res => res.text().then(text => {
-                console.log('ALERT RESPONSE', res.status, text);
-            }))
-            .catch(err => {
-                console.error('Alert trigger failed:', err);
-            })
-        );` : ''}
-
-        return new Response('Forbidden: Content blocked.', { status: 403 });
-    }
-
-    return response;
-}`;
+    // Generate script content using template
+    const template = generateWorkerTemplate({
+      scriptName: script.scriptName,
+      keywords: script.keywords,
+      whitelistPaths: script.whitelistPaths || [],
+      enableAlert: script.enableAlert,
+    });
     
     // Deploy to Cloudflare
     if (scriptName && scriptName !== oldScriptName) {
